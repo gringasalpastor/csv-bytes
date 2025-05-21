@@ -1,0 +1,19 @@
+[package]
+name = "csv-bytes"
+authors = ["Michael Hancock"]
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+keywords = ["csv", "lazy", "zero-copy", "parser", "delimited"]
+description = "A lazy CSV parser"
+repository = "https://github.com/gringasalpastor/csv-bytes"
+readme = "README.md"
+categories = ["encoding", "parser-implementations"]
+exclude = ["assets", ".github", ".gitignore"]
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[dependencies]
+
+[dev-dependencies]
