@@ -15,5 +15,11 @@ exclude = ["assets", ".github", ".gitignore"]
 pedantic = { level = "warn", priority = -1 }
 
 [dependencies]
+bytemuck = "1.23.2"
+crossbeam-channel = "0.5.15"
+crossbeam-utils = "0.8.21"
+lockfree-object-pool = "0.1.6"
+memchr = "2.7.5"
+memmap2 = "0.9.7"
 
 [dev-dependencies]
