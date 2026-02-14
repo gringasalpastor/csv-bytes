@@ -25,6 +25,9 @@ impl Terminator {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct Offset(pub(crate) usize);
+
 #[derive(Default)]
 pub struct Nfa {
     config: ParserConfig,
@@ -204,6 +207,17 @@ impl Default for ParserConfig {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum ScanRecordError {
+    WrongNumOfFields(Offset),
+    InputExhausted,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum FindARecordEndError {
+    InputExhausted,
+    ExceededMaxTries,
+}
 pub trait FiniteAutomata {
     fn scan_record(&self, input: &[u8]) -> Result<Offset, ScanRecordError>;
     fn find_a_record_end(&self, buffer: &[u8]) -> Result<Offset, FindARecordEndError>;
@@ -227,21 +241,6 @@ fn scan(scan_action: &ScanAction, buffer: &[u8]) -> Option<Offset> {
             Some(Offset(memchr::memchr3(b'"', b',', b'\n', slice)? + 1))
         }
     }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct Offset(pub(crate) usize);
-
-#[derive(Copy, Clone, Debug)]
-pub enum ScanRecordError {
-    WrongNumOfFields(Offset),
-    InputExhausted,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum FindARecordEndError {
-    InputExhausted,
-    ExceededMaxTries,
 }
 
 impl FiniteAutomata for Nfa {

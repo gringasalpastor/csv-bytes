@@ -7,8 +7,8 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::thread;
 
-use crate::finite_automata::FiniteAutomata;
 use crate::finite_automata::{self, FindARecordEndError};
+use crate::finite_automata::{FiniteAutomata, Offset};
 
 pub trait AsBytes {
     fn as_bytes(&self) -> &[u8];
@@ -25,13 +25,21 @@ impl<B: AsRef<[u8]> + ?Sized> AsBytes for WorkChunk<B> {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum ProcessError {
+    ExceededMaxTriesToFindARecordEnd(Offset),
+}
+
 pub trait DataSource {
     type WorkType: AsBytes + Send;
-    fn fill_queue(
+    /// TODO
+    /// # Errors
+    /// ...
+    fn process(
         &mut self,
         ch_source: &crossbeam_channel::Sender<Self::WorkType>,
         finite_automaton: finite_automata::Nfa,
-    ) -> Result<(), FillQueueError>;
+    ) -> Result<(), ProcessError>;
 }
 
 fn file_read_bytes_to_spare_capacity(file: &mut File, buffer: &mut Vec<u8>) {
@@ -63,22 +71,18 @@ fn file_read_bytes_to_spare_capacity(file: &mut File, buffer: &mut Vec<u8>) {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum FillQueueError {
-    Failed,
-}
-
 impl DataSource for File {
     type WorkType = WorkChunk<[u8]>;
 
-    fn fill_queue(
+    fn process(
         &mut self,
         ch_source: &crossbeam_channel::Sender<Self::WorkType>,
         finite_automata: finite_automata::Nfa,
-    ) -> Result<(), FillQueueError> {
+    ) -> Result<(), ProcessError> {
         #[allow(unused_assignments)]
         let mut shared_buffer: Arc<[u8]> = Arc::new([]);
         let mut leftover: &[u8] = &[];
+        let mut buffer_offset = 0; // offset to where the current buffer starts in the file
         loop {
             const SIZE_1_MIB: usize = 1024 * 1024;
             const SIZE_128_KIB: usize = 1024 * 128;
@@ -120,7 +124,9 @@ impl DataSource for File {
                         leftover = &shared_buffer[cur_offset..];
                     }
                     Err(FindARecordEndError::ExceededMaxTries) => {
-                        return Err(FillQueueError::Failed);
+                        return Err(ProcessError::ExceededMaxTriesToFindARecordEnd(Offset(
+                            buffer_offset + search_start_offset,
+                        )));
                     }
                     Err(FindARecordEndError::InputExhausted) => {
                         leftover = &shared_buffer[cur_offset..];
@@ -128,6 +134,8 @@ impl DataSource for File {
                     }
                 }
             }
+
+            buffer_offset += shared_buffer.len();
         }
         println!("Producer: Process leftover, size={:?}", leftover.len());
         Ok(())
@@ -137,11 +145,11 @@ impl DataSource for File {
 impl DataSource for Mmap {
     type WorkType = WorkChunk<Mmap>;
 
-    fn fill_queue<'a>(
+    fn process<'a>(
         &mut self,
         _ch_source: &crossbeam_channel::Sender<Self::WorkType>,
         _finite_automaton: finite_automata::Nfa,
-    ) -> Result<(), FillQueueError> {
+    ) -> Result<(), ProcessError> {
         Ok(())
     }
 }
@@ -182,7 +190,7 @@ pub fn process<T: DataSource + Send>(data_source: T) {
         handles.push(s.spawn(move || {
             let mut data_source = data_source;
             data_source
-                .fill_queue(&ch_source, finite_automaton)
+                .process(&ch_source, finite_automaton)
                 .expect("Failed");
         }));
 
